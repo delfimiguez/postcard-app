@@ -1,128 +1,55 @@
-// Este archivo maneja el envío de postales de forma segura
-import fetch from 'node-fetch';
-
-// Almacenamiento simple en memoria (resetea al reiniciar)
-// Para producción, usa una base de datos
-let usedCodes = new Set();
-let totalSent = 0;
-const MAX_SENDS = 300;
+// api/send-postcard.js
 
 export default async function handler(req, res) {
-  // Solo permitir POST
+  // Log básico para ver qué llega
+  console.log('Método:', req.method);
+
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Método no permitido' });
-  }
-
-  // Verificar límite de envíos
-  if (totalSent >= MAX_SENDS) {
-    return res.status(403).json({
-      error: 'Límite de envíos alcanzado',
-      sent: totalSent,
-      max: MAX_SENDS
+    // Cuando entres por navegador (GET) vas a ver esto:
+    return res.status(200).json({
+      ok: true,
+      message: 'API send-postcard está viva. Usa POST desde el formulario.'
     });
-  }
-
-  const { image, message, address, accessCode } = req.body;
-
-  // Validar que todos los campos estén presentes
-  if (!image || !message || !address?.name || !address?.street || !address?.city || !address?.postalCode) {
-    return res.status(400).json({ error: 'Faltan datos requeridos' });
-  }
-
-  // Opcional: Verificar código de acceso único
-  if (accessCode) {
-    if (usedCodes.has(accessCode)) {
-      return res.status(403).json({ error: 'Este código ya fue usado' });
-    }
-    usedCodes.add(accessCode);
   }
 
   try {
-    // Preparar FormData para Stannp
-    const FormData = (await import('form-data')).default;
-    const formData = new FormData();
+    let body = req.body;
 
-    // Configuración (test mode para pruebas)
-    formData.append('test', process.env.STANNP_TEST_MODE || 'true');
-
-    // Datos del destinatario
-    formData.append('recipient[firstname]', address.name.split(' ')[0]);
-    formData.append('recipient[lastname]', address.name.split(' ').slice(1).join(' ') || '');
-    formData.append('recipient[address1]', address.street);
-    formData.append('recipient[city]', address.city);
-    formData.append('recipient[postcode]', address.postalCode);
-    formData.append('recipient[country]', 'ES');
-
-    // Convertir imagen base64 a buffer
-    const imageBuffer = Buffer.from(image.replace(/^data:image\/\w+;base64,/, ''), 'base64');
-    formData.append('front', imageBuffer, {
-      filename: 'front.jpg',
-      contentType: 'image/jpeg'
-    });
-
-    // Crear HTML para el reverso
-    const backHtml = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <style>
-          body {
-            font-family: Helvetica, Arial, sans-serif;
-            padding: 40px;
-            margin: 0;
-          }
-          .message {
-            font-size: 14pt;
-            line-height: 1.6;
-            color: #333;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="message">${message}</div>
-      </body>
-      </html>
-    `;
-
-    formData.append('back', Buffer.from(backHtml), {
-      filename: 'back.html',
-      contentType: 'text/html'
-    });
-
-    formData.append('size', 'A5');
-    formData.append('post_unverified', '1');
-
-    // Llamar a Stannp API
-    const response = await fetch('https://dash.stannp.com/api/v1/postcards/create', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.STANNP_API_KEY}`,
-        ...formData.getHeaders()
-      },
-      body: formData
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Error al enviar a Stannp');
+    // En funciones Node de Vercel a veces req.body viene vacío,
+    // así que leemos el stream por las dudas:
+    if (!body || Object.keys(body).length === 0) {
+      const chunks = [];
+      for await (const chunk of req) {
+        chunks.push(chunk);
+      }
+      const raw = Buffer.concat(chunks).toString('utf8');
+      body = raw ? JSON.parse(raw) : {};
     }
 
-    const result = await response.json();
-    totalSent++;
+    console.log('Body recibido:', body);
 
+    const { email, imageUrl, message } = body;
+
+    if (!email || !imageUrl || !message) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Faltan campos requeridos',
+        body
+      });
+    }
+
+    // 🧪 Por ahora NO mandamos nada a ningún lado.
+    // Solo confirmamos que llegó bien.
     return res.status(200).json({
-      success: true,
-      message: 'Postal enviada correctamente',
-      sent: totalSent,
-      remaining: MAX_SENDS - totalSent,
-      stannpId: result.data?.id
+      ok: true,
+      message: 'Postal recibida correctamente en el backend',
+      received: { email, imageUrl, message }
     });
-
-  } catch (error) {
-    console.error('Error:', error);
+  } catch (err) {
+    console.error('Error en send-postcard:', err);
     return res.status(500).json({
-      error: 'Error al enviar la postal',
-      details: error.message
+      ok: false,
+      error: 'Error interno del servidor'
     });
   }
 }
