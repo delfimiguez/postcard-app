@@ -46,14 +46,18 @@ if (!image || !message) {
     // Configuración (test mode para pruebas)
     formData.append('test', process.env.STANNP_TEST_MODE || 'true');
 
-    // Datos del destinatario
-    // DESTINATARIO FIJO — SIEMPRE VA A MI DIRECCIÓN
-    formData.append('recipient[firstname]', 'Delfina');
-    formData.append('recipient[lastname]', 'Miguez');
-    formData.append('recipient[address1]', 'TU CALLE Y NUMERO');
-    formData.append('recipient[city]', 'TU CIUDAD');
-    formData.append('recipient[postcode]', 'TU CÓDIGO POSTAL');
-    formData.append('recipient[country]', 'ES');  // España
+    // Destinatario fijo: siempre Delfi :)
+  const fullName = 'Delfina Miguez';
+  const firstName = fullName.split(' ')[0];
+  const lastName = fullName.split(' ').slice(1).join(' ') || '';
+
+  formData.append('recipient[firstname]', firstName);
+  formData.append('recipient[lastname]', lastName);
+  formData.append('recipient[address1]', 'Carrer de Provenza, 3 1'); // ← cambia esto
+  formData.append('recipient[city]', 'Barcelona');               // ← cambia si hace falta
+  formData.append('recipient[postcode]', '08029');               // ← tu código postal
+  formData.append('recipient[country]', 'ES');
+
 
 
     // Convertir imagen base64 a buffer
