@@ -46,12 +46,14 @@ export default async function handler(req, res) {
     formData.append('test', process.env.STANNP_TEST_MODE || 'true');
 
     // Datos del destinatario
-    formData.append('recipient[firstname]', address.name.split(' ')[0]);
-    formData.append('recipient[lastname]', address.name.split(' ').slice(1).join(' ') || '');
-    formData.append('recipient[address1]', address.street);
-    formData.append('recipient[city]', address.city);
-    formData.append('recipient[postcode]', address.postalCode);
-    formData.append('recipient[country]', 'ES');
+    // DESTINATARIO FIJO — SIEMPRE VA A MI DIRECCIÓN
+    formData.append('recipient[firstname]', 'Delfina');
+    formData.append('recipient[lastname]', 'Miguez');
+    formData.append('recipient[address1]', 'TU CALLE Y NUMERO');
+    formData.append('recipient[city]', 'TU CIUDAD');
+    formData.append('recipient[postcode]', 'TU CÓDIGO POSTAL');
+    formData.append('recipient[country]', 'ES');  // España
+
 
     // Convertir imagen base64 a buffer
     const imageBuffer = Buffer.from(image.replace(/^data:image\/\w+;base64,/, ''), 'base64');
