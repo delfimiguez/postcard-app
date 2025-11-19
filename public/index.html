@@ -37,13 +37,54 @@
       const [error, setError] = useState('');
 
       const handleImageUpload = (e) => {
-        const file = e.target.files[0];
-        if (file) {
-          const reader = new FileReader();
-          reader.onload = (event) => setCustomImage(event.target.result);
-          reader.readAsDataURL(file);
-        }
-      };
+  const file = e.target.files[0];
+  if (!file) return;
+
+  // Limite rápido por tamaño antes de procesar
+  const maxFileSizeMB = 3;
+  if (file.size > maxFileSizeMB * 1024 * 1024) {
+    setError(`La imagen es demasiado grande (máx ${maxFileSizeMB}MB).`);
+    return;
+  }
+
+  setError('');
+
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    const img = new Image();
+    img.onload = () => {
+      const maxWidth = 1000; // reducir si sigue siendo muy pesada
+      const scale = Math.min(1, maxWidth / img.width);
+
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+      // Exportar a jpeg comprimido
+      const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.6);
+
+      console.log('📉 Tamaño dataURL comprimida:', compressedDataUrl.length, 'caracteres');
+
+      setCustomImage(compressedDataUrl);
+    };
+
+    img.onerror = () => {
+      setError('No se pudo procesar la imagen.');
+    };
+
+    img.src = event.target.result;
+  };
+
+  reader.onerror = () => {
+    setError('Error al leer la imagen.');
+  };
+
+  reader.readAsDataURL(file);
+};
+
 
       const handleSubmit = async () => {
         if (customImage && message && address.name && address.street && address.city && address.postalCode) {
