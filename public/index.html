@@ -1,192 +1,132 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Envía tu Postal Personalizada</title>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Federo&display=swap" rel="stylesheet" />
-  <style>
-    body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Federo&display=swap" rel="stylesheet">
 </head>
-<body class="min-h-screen">
+<body>
   <div id="root"></div>
 
   <script type="text/babel">
     const { useState } = React;
-
-    function Upload() {
-      return (
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="24"
-          height="24"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="mx-auto mb-2"
-        >
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-          <polyline points="17 8 12 3 7 8"></polyline>
-          <line x1="12" y1="3" x2="12" y2="15"></line>
-        </svg>
-      );
-    }
+    const Upload = () => (
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <polyline points="17 8 12 3 7 8"></polyline>
+        <line x1="12" y1="3" x2="12" y2="15"></line>
+      </svg>
+    );
 
     function PostcardApp() {
       const [customImage, setCustomImage] = useState(null);
-      const [message, setMessage] = useState("");
+      const [message, setMessage] = useState('');
       const [address, setAddress] = useState({
-        name: "",
-        street: "",
-        city: "",
-        postalCode: "",
+        name: '',
+        street: '',
+        city: '',
+        postalCode: ''
       });
       const [submitted, setSubmitted] = useState(false);
       const [sending, setSending] = useState(false);
-      const [error, setError] = useState("");
+      const [error, setError] = useState('');
 
       const handleImageUpload = (e) => {
         const file = e.target.files[0];
-        if (!file) return;
-
-        const maxFileSizeMB = 3;
-        if (file.size > maxFileSizeMB * 1024 * 1024) {
-          setError(`La imagen es demasiado grande (máx ${maxFileSizeMB}MB).`);
-          return;
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (event) => setCustomImage(event.target.result);
+          reader.readAsDataURL(file);
         }
-
-        setError("");
-
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          const img = new Image();
-          img.onload = () => {
-            const maxWidth = 1000;
-            const scale = Math.min(1, maxWidth / img.width);
-
-            const canvas = document.createElement("canvas");
-            canvas.width = img.width * scale;
-            canvas.height = img.height * scale;
-
-            const ctx = canvas.getContext("2d");
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-            const compressedDataUrl = canvas.toDataURL("image/jpeg", 0.6);
-
-            console.log("📉 Tamaño dataURL comprimida:", compressedDataUrl.length, "caracteres");
-            setCustomImage(compressedDataUrl);
-          };
-
-          img.onerror = () => {
-            setError("No se pudo procesar la imagen.");
-          };
-
-          img.src = event.target.result;
-        };
-
-        reader.onerror = () => {
-          setError("Error al leer la imagen.");
-        };
-
-        reader.readAsDataURL(file);
       };
 
       const handleSubmit = async () => {
-        if (
-          !customImage ||
-          !message ||
-          !address.name ||
-          !address.street ||
-          !address.city ||
-          !address.postalCode
-        ) {
-          return;
-        }
+        if (customImage && message && address.name && address.street && address.city && address.postalCode) {
+          setSending(true);
+          setError('');
 
-        setSending(true);
-        setError("");
-
-        if (customImage && customImage.length > 3000000) {
-          setError(
-            "La imagen sigue siendo muy pesada después de comprimir. Probá con una más pequeña."
-          );
-          setSending(false);
-          return;
-        }
-
-        try {
-          const payload = {
-            image: customImage,
-            message: message,
-            address: address,
-          };
-
-          console.log("📤 Enviando payload:", payload);
-
-          const response = await fetch("/api/send-postcard", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(payload),
-          });
-
-          const text = await response.text();
-          console.log("📥 Respuesta cruda de la API:", text);
-          console.log("📡 Status:", response.status);
-
-          let data = null;
           try {
-            data = JSON.parse(text);
-          } catch (parseErr) {
-            console.error("⚠️ Error parseando JSON:", parseErr);
-          }
+            const response = await fetch('/api/send-postcard', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                image: customImage,
+                message: message,
+                address: address
+              })
+            });
 
-          if (!response.ok) {
-            console.error("❌ Error desde la API:", data);
-            setError((data && data.error) || "Error al enviar la postal");
+            const data = await response.json();
+
+            if (response.ok) {
+              setSubmitted(true);
+            } else {
+              setError(data.error || 'Error al enviar la postal');
+              setSending(false);
+            }
+          } catch (err) {
+            setError('Error de conexión. Intenta de nuevo.');
             setSending(false);
-            return;
           }
-
-          console.log("✅ Postal enviada correctamente:", data);
-          setSubmitted(true);
-        } catch (err) {
-          console.error("🚨 Error en fetch:", err);
-          setError("Error de conexión. Intenta de nuevo.");
-          setSending(false);
         }
       };
 
       if (submitted) {
         return (
-          <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-rose-100 via-sky-100 to-emerald-100">
-            <div className="flex flex-col items-center space-y-8">
-              <div className="px-8 py-3 bg-white rounded-full shadow">
-                <h1 className="text-lg font-bold text-sky-400">
-                  ¡Tu postal fue enviada!
-                </h1>
+          <div style={{
+            minHeight: '100vh',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'linear-gradient(135deg, #FFE5E5 0%, #E5F3FF 25%, #FFF5E5 50%, #E5FFE5 75%, #F5E5FF 100%)',
+            backgroundSize: '400% 400%',
+            animation: 'gradient 15s ease infinite'
+          }}>
+            <style>{`
+              @keyframes gradient {
+                0% { background-position: 0% 50%; }
+                50% { background-position: 100% 50%; }
+                100% { background-position: 0% 50%; }
+              }
+            `}</style>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{
+                display: 'inline-block',
+                padding: '1rem 3rem',
+                background: 'white',
+                borderRadius: '9999px',
+                marginBottom: '2.5rem'
+              }}>
+                <h1 style={{
+                  fontSize: '1.5rem',
+                  fontWeight: 'bold',
+                  color: '#A8D8EA'
+                }}>Tu postal fue enviada!</h1>
               </div>
-              <div className="bg-white p-2 shadow-xl rotate-3">
-                <div
-                  className="w-72 h-48 rounded bg-cover bg-center"
-                  style={{
-                    backgroundImage: customImage
-                      ? `url(${customImage})`
-                      : "none",
-                    backgroundColor: customImage ? "transparent" : "#E5D4B8",
-                  }}
-                ></div>
+
+              <div style={{
+                display: 'inline-block',
+                transform: 'rotate(8deg)',
+                background: 'white',
+                padding: '0.75rem',
+                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
+              }}>
+                <div style={{
+                  width: '300px',
+                  height: '200px',
+                  backgroundImage: customImage ? `url(${customImage})` : 'none',
+                  backgroundColor: '#E5D4B8',
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                  borderRadius: '0.25rem'
+                }}></div>
               </div>
             </div>
           </div>
@@ -194,159 +134,209 @@
       }
 
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-rose-100 via-sky-100 to-emerald-100 p-6">
-          <div className="bg-white rounded-3xl shadow-lg max-w-md w-full p-6 space-y-6">
-            <div className="text-center space-y-1">
-              <h1 className="text-2xl font-bold text-gray-900">
+        <div style={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '2rem',
+          background: 'linear-gradient(135deg, #FFE5E5 0%, #E5F3FF 25%, #FFF5E5 50%, #E5FFE5 75%, #F5E5FF 100%)',
+          backgroundSize: '400% 400%',
+          animation: 'gradient 15s ease infinite'
+        }}>
+          <style>{`
+            @keyframes gradient {
+              0% { background-position: 0% 50%; }
+              50% { background-position: 100% 50%; }
+              100% { background-position: 0% 50%; }
+            }
+          `}</style>
+          <div style={{
+            background: 'white',
+            borderRadius: '1.5rem',
+            padding: '2rem',
+            maxWidth: '28rem',
+            width: '100%',
+            boxShadow: '0 4px 6px rgba(0, 0, 0, 0.07)'
+          }}>
+            <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+              <h1 style={{ fontSize: '1.875rem', fontWeight: 'bold', color: '#111827', marginBottom: '0.5rem' }}>
                 Envía tu postal
               </h1>
-              <p className="text-sm text-gray-500">
-                Completa los datos y sube tu imagen
-              </p>
+              <p style={{ color: '#6B7280' }}>Completa los datos y sube tu imagen</p>
             </div>
 
-            {error && (
-              <div className="bg-red-100 border border-red-300 text-red-800 rounded-2xl px-4 py-3 text-sm">
-                {error}
-              </div>
-            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              {error && (
+                <div style={{
+                  background: '#FEE2E2',
+                  border: '1px solid #FCA5A5',
+                  borderRadius: '1rem',
+                  padding: '1rem'
+                }}>
+                  <p style={{ color: '#991B1B', fontSize: '0.875rem' }}>{error}</p>
+                </div>
+              )}
 
-            {/* Imagen */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Tu imagen
-              </label>
-              <div className="border-2 border-dashed border-gray-300 rounded-2xl p-4 text-center cursor-pointer">
-                {customImage ? (
-                  <div>
-                    <img
-                      src={customImage}
-                      alt="Preview"
-                      className="w-full h-48 object-cover rounded-lg mb-3"
-                    />
-                    <label className="inline-block px-4 py-2 bg-black text-white rounded-full text-sm cursor-pointer">
-                      Cambiar imagen
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleImageUpload}
-                        className="hidden"
-                      />
+              {/* Upload Image */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', color: '#374151', marginBottom: '0.5rem' }}>
+                  Tu Imagen
+                </label>
+                <div style={{
+                  border: '2px dashed #D1D5DB',
+                  borderRadius: '1rem',
+                  padding: '1.5rem',
+                  textAlign: 'center',
+                  cursor: 'pointer'
+                }}>
+                  {customImage ? (
+                    <div>
+                      <img src={customImage} alt="Preview" style={{
+                        width: '100%',
+                        height: '12rem',
+                        objectFit: 'cover',
+                        borderRadius: '0.5rem',
+                        marginBottom: '0.75rem'
+                      }} />
+                      <label style={{
+                        cursor: 'pointer',
+                        display: 'inline-block',
+                        padding: '0.5rem 1.5rem',
+                        background: 'black',
+                        color: 'white',
+                        borderRadius: '9999px',
+                        fontSize: '0.875rem'
+                      }}>
+                        Cambiar imagen
+                        <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
+                      </label>
+                    </div>
+                  ) : (
+                    <label style={{ cursor: 'pointer' }}>
+                      <Upload />
+                      <p style={{ color: '#6B7280', marginBottom: '0.25rem', fontWeight: '500' }}>Subir imagen</p>
+                      <p style={{ fontSize: '0.75rem', color: '#9CA3AF' }}>PNG o JPEG (máx. 5MB)</p>
+                      <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
                     </label>
-                  </div>
-                ) : (
-                  <label className="cursor-pointer flex flex-col items-center">
-                    <Upload />
-                    <p className="text-gray-600 font-medium mb-1">
-                      Subir imagen
-                    </p>
-                    <p className="text-xs text-gray-400">
-                      PNG o JPEG (máx. 5MB)
-                    </p>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageUpload}
-                      className="hidden"
-                    />
-                  </label>
-                )}
-              </div>
-            </div>
-
-            {/* Mensaje */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Tu mensaje
-              </label>
-              <textarea
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                placeholder="Escribe tu mensaje aquí..."
-                rows={4}
-                className="w-full border border-gray-300 rounded-2xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black focus:border-black"
-              />
-            </div>
-
-            {/* Dirección */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Dirección de envío
-              </label>
-              <div className="space-y-2">
-                <input
-                  type="text"
-                  value={address.name}
-                  onChange={(e) =>
-                    setAddress({ ...address, name: e.target.value })
-                  }
-                  placeholder="Nombre completo"
-                  className="w-full border border-gray-300 rounded-2xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black focus:border-black"
-                />
-                <input
-                  type="text"
-                  value={address.street}
-                  onChange={(e) =>
-                    setAddress({ ...address, street: e.target.value })
-                  }
-                  placeholder="Dirección"
-                  className="w-full border border-gray-300 rounded-2xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black focus:border-black"
-                />
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="text"
-                    value={address.city}
-                    onChange={(e) =>
-                      setAddress({ ...address, city: e.target.value })
-                    }
-                    placeholder="Ciudad"
-                    className="w-full border border-gray-300 rounded-2xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black focus:border-black"
-                  />
-                  <input
-                    type="text"
-                    value={address.postalCode}
-                    onChange={(e) =>
-                      setAddress({ ...address, postalCode: e.target.value })
-                    }
-                    placeholder="Código Postal"
-                    className="w-full border border-gray-300 rounded-2xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black focus:border-black"
-                  />
+                  )}
                 </div>
               </div>
-            </div>
 
-            {/* Botón */}
-            <button
-              onClick={handleSubmit}
-              disabled={
-                !customImage ||
-                !message ||
-                !address.name ||
-                !address.street ||
-                !address.city ||
-                !address.postalCode ||
-                sending
-              }
-              className={`w-full py-3 rounded-full font-semibold text-sm text-white ${
-                customImage &&
-                message &&
-                address.name &&
-                address.street &&
-                address.city &&
-                address.postalCode &&
-                !sending
-                  ? "bg-black cursor-pointer"
-                  : "bg-gray-300 cursor-not-allowed"
-              }`}
-            >
-              {sending ? "Enviando..." : "Enviar postal"}
-            </button>
+              {/* Message */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', color: '#374151', marginBottom: '0.5rem' }}>
+                  Tu Mensaje
+                </label>
+                <textarea
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  placeholder="Escribe tu mensaje aquí..."
+                  rows="4"
+                  style={{
+                    width: '100%',
+                    border: '1px solid #D1D5DB',
+                    borderRadius: '1rem',
+                    padding: '0.75rem 1rem',
+                    outline: 'none',
+                    fontFamily: 'Helvetica, Arial, sans-serif',
+                    resize: 'none'
+                  }}
+                />
+              </div>
+
+              {/* Address */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', color: '#374151', marginBottom: '0.5rem' }}>
+                  Dirección de envío
+                </label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <input
+                    type="text"
+                    value={address.name}
+                    onChange={(e) => setAddress({...address, name: e.target.value})}
+                    placeholder="Nombre completo"
+                    style={{
+                      width: '100%',
+                      border: '1px solid #D1D5DB',
+                      borderRadius: '1rem',
+                      padding: '0.75rem 1rem',
+                      outline: 'none',
+                      fontFamily: 'Helvetica, Arial, sans-serif'
+                    }}
+                  />
+                  <input
+                    type="text"
+                    value={address.street}
+                    onChange={(e) => setAddress({...address, street: e.target.value})}
+                    placeholder="Dirección"
+                    style={{
+                      width: '100%',
+                      border: '1px solid #D1D5DB',
+                      borderRadius: '1rem',
+                      padding: '0.75rem 1rem',
+                      outline: 'none',
+                      fontFamily: 'Helvetica, Arial, sans-serif'
+                    }}
+                  />
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                    <input
+                      type="text"
+                      value={address.city}
+                      onChange={(e) => setAddress({...address, city: e.target.value})}
+                      placeholder="Ciudad"
+                      style={{
+                        width: '100%',
+                        border: '1px solid #D1D5DB',
+                        borderRadius: '1rem',
+                        padding: '0.75rem 1rem',
+                        outline: 'none',
+                        fontFamily: 'Helvetica, Arial, sans-serif'
+                      }}
+                    />
+                    <input
+                      type="text"
+                      value={address.postalCode}
+                      onChange={(e) => setAddress({...address, postalCode: e.target.value})}
+                      placeholder="Código Postal"
+                      style={{
+                        width: '100%',
+                        border: '1px solid #D1D5DB',
+                        borderRadius: '1rem',
+                        padding: '0.75rem 1rem',
+                        outline: 'none',
+                        fontFamily: 'Helvetica, Arial, sans-serif'
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <button
+                onClick={handleSubmit}
+                disabled={!customImage || !message || !address.name || !address.street || !address.city || !address.postalCode || sending}
+                style={{
+                  width: '100%',
+                  padding: '1rem',
+                  borderRadius: '9999px',
+                  fontWeight: '600',
+                  color: 'white',
+                  background: (customImage && message && address.name && address.street && address.city && address.postalCode && !sending) ? 'black' : '#D1D5DB',
+                  cursor: (customImage && message && address.name && address.street && address.city && address.postalCode && !sending) ? 'pointer' : 'not-allowed',
+                  border: 'none'
+                }}
+              >
+                {sending ? 'Enviando...' : 'Enviar Postal'}
+              </button>
+            </div>
           </div>
         </div>
       );
     }
 
-    ReactDOM.render(<PostcardApp />, document.getElementById("root"));
+    ReactDOM.render(<PostcardApp />, document.getElementById('root'));
   </script>
 </body>
 </html>
+
