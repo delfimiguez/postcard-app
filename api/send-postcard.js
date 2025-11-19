@@ -22,12 +22,13 @@ export default async function handler(req, res) {
     });
   }
 
-  const { image, message, address, accessCode } = req.body;
+  const { image, message, accessCode } = req.body;
 
-  // Validar que todos los campos estén presentes
-  if (!image || !message || !address?.name || !address?.street || !address?.city || !address?.postalCode) {
-    return res.status(400).json({ error: 'Faltan datos requeridos' });
-  }
+// Validar que todos los campos estén presentes
+if (!image || !message) {
+  return res.status(400).json({ error: 'Faltan datos requeridos (imagen o mensaje)' });
+}
+
 
   // Opcional: Verificar código de acceso único
   if (accessCode) {
