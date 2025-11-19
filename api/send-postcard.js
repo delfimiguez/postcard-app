@@ -1,8 +1,7 @@
-// Este archivo maneja el envío de postales de forma segura
+// api/send-postcard.js
+
 import fetch from 'node-fetch';
 
-// Almacenamiento simple en memoria (resetea al reiniciar)
-// Para producción, usa una base de datos
 let usedCodes = new Set();
 let totalSent = 0;
 const MAX_SENDS = 300;
@@ -22,15 +21,17 @@ export default async function handler(req, res) {
     });
   }
 
-  const { image, message, accessCode } = req.body;
+  // 👇 Ya NO usamos address, solo imagen + mensaje
+  const { image, message, accessCode } = req.body || {};
 
-// Validar que todos los campos estén presentes
-if (!image || !message) {
-  return res.status(400).json({ error: 'Faltan datos requeridos (imagen o mensaje)' });
-}
+  // Validar datos mínimos
+  if (!image || !message) {
+    return res
+      .status(400)
+      .json({ error: 'Faltan datos requeridos (imagen o mensaje)' });
+  }
 
-
-  // Opcional: Verificar código de acceso único
+  // Opcional: código de acceso
   if (accessCode) {
     if (usedCodes.has(accessCode)) {
       return res.status(403).json({ error: 'Este código ya fue usado' });
@@ -39,39 +40,40 @@ if (!image || !message) {
   }
 
   try {
-    // Preparar FormData para Stannp
     const FormData = (await import('form-data')).default;
     const formData = new FormData();
 
-    // Configuración (test mode para pruebas)
-    formData.append('test', process.env.STANNP_TEST_MODE || 'true');
+    // Test mode (true/false desde env, o true por defecto)
+    formData.append('test', process.env.STANNP_TEST_MODE ?? 'true');
 
-    // Destinatario fijo: siempre Delfi :)
-  const fullName = 'Delfina Miguez';
-  const firstName = fullName.split(' ')[0];
-  const lastName = fullName.split(' ').slice(1).join(' ') || '';
+    // 👇 DESTINATARIO FIJO — TODO VA A TU DIRECCIÓN
+    const fullName = 'Delfina Miguez';
+    const [firstName, ...rest] = fullName.split(' ');
+    const lastName = rest.join(' ');
 
-  formData.append('recipient[firstname]', firstName);
-  formData.append('recipient[lastname]', lastName);
-  formData.append('recipient[address1]', 'Carrer de Provenza, 3 1'); // ← cambia esto
-  formData.append('recipient[city]', 'Barcelona');               // ← cambia si hace falta
-  formData.append('recipient[postcode]', '08029');               // ← tu código postal
-  formData.append('recipient[country]', 'ES');
+    formData.append('recipient[firstname]', firstName);
+    formData.append('recipient[lastname]', lastName);
 
+    // ⚠️ EDITÁ ESTAS LÍNEAS CON TU DIRECCIÓN REAL
+    formData.append('recipient[address1]', 'Carrer de Provenca 36, PISO 3 1');
+    formData.append('recipient[city]', 'Barcelona');
+    formData.append('recipient[postcode]', '08029');
+    formData.append('recipient[country]', 'ES');
 
-
-    // Convertir imagen base64 a buffer
-    const imageBuffer = Buffer.from(image.replace(/^data:image\/\w+;base64,/, ''), 'base64');
+    // Imagen frontal (base64 → buffer)
+    const base64 = image.replace(/^data:image\/\w+;base64,/, '');
+    const imageBuffer = Buffer.from(base64, 'base64');
     formData.append('front', imageBuffer, {
       filename: 'front.jpg',
       contentType: 'image/jpeg'
     });
 
-    // Crear HTML para el reverso
+    // Reverso con el mensaje
     const backHtml = `
       <!DOCTYPE html>
       <html>
       <head>
+        <meta charset="utf-8" />
         <style>
           body {
             font-family: Helvetica, Arial, sans-serif;
@@ -99,31 +101,44 @@ if (!image || !message) {
     formData.append('size', 'A5');
     formData.append('post_unverified', '1');
 
-            // Llamar a la API correcta de Stannp
     const apiKey = process.env.STANNP_API_KEY;
     if (!apiKey) {
-      throw new Error('STANNP_API_KEY no está definida en las env vars');
+      console.error('STANNP_API_KEY no está definida');
+      return res
+        .status(500)
+        .json({ error: 'Configuración del servidor incompleta (API key)' });
     }
 
-    // Usa el endpoint público de la API (EU por defecto)
-    const apiBase = process.env.STANNP_API_BASE || 'https://api-eu1.stannp.com';
+    // Endpoint correcto EU1 con api_key en la query
+    const response = await fetch(
+      `https://api-eu1.stannp.com/api/v1/postcards/create?api_key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: formData.getHeaders(),
+        body: formData
+      }
+    );
 
-    const response = await fetch(`${apiBase}/v1/postcards/create?api_key=${apiKey}`, {
-      method: 'POST',
-      headers: {
-        ...formData.getHeaders()
-      },
-      body: formData
-    });
-
-
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Error al enviar a Stannp');
+    const rawText = await response.text();
+    let result;
+    try {
+      result = JSON.parse(rawText);
+    } catch {
+      console.error('Respuesta no JSON de Stannp:', rawText);
+      return res.status(502).json({
+        error: 'Respuesta inesperada de Stannp',
+        details: rawText
+      });
     }
 
-    const result = await response.json();
+    if (!response.ok || result.success === false) {
+      console.error('Error de Stannp:', result);
+      return res.status(502).json({
+        error: 'Error al enviar la postal',
+        details: result.error || rawText
+      });
+    }
+
     totalSent++;
 
     return res.status(200).json({
@@ -131,14 +146,15 @@ if (!image || !message) {
       message: 'Postal enviada correctamente',
       sent: totalSent,
       remaining: MAX_SENDS - totalSent,
-      stannpId: result.data?.id
+      stannpId: result.data?.id ?? null,
+      stannpRaw: result
     });
-
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Error en función /api/send-postcard:', error);
     return res.status(500).json({
       error: 'Error al enviar la postal',
       details: error.message
     });
   }
 }
+
