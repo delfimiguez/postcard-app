@@ -92,15 +92,20 @@ export default async function handler(req, res) {
     formData.append('size', 'A5');
     formData.append('post_unverified', '1');
 
-    // Llamar a Stannp API
-    const response = await fetch('https://dash.stannp.com/api/v1/postcards/create', {
+        // Llamar a Stannp API (autenticando con api_key en la URL)
+    const apiKey = process.env.STANNP_API_KEY;
+    if (!apiKey) {
+      throw new Error('STANNP_API_KEY no está definida en las env vars');
+    }
+
+    const response = await fetch(`https://dash.stannp.com/api/v1/postcards/create?api_key=${apiKey}`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${process.env.STANNP_API_KEY}`,
         ...formData.getHeaders()
       },
       body: formData
     });
+
 
     if (!response.ok) {
       const error = await response.json();
