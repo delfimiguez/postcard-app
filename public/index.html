@@ -26,12 +26,6 @@
     function PostcardApp() {
       const [customImage, setCustomImage] = useState(null);
       const [message, setMessage] = useState('');
-      const [address, setAddress] = useState({
-        name: '',
-        street: '',
-        city: '',
-        postalCode: ''
-      });
       const [submitted, setSubmitted] = useState(false);
       const [sending, setSending] = useState(false);
       const [error, setError] = useState('');
@@ -46,7 +40,7 @@
       };
 
       const handleSubmit = async () => {
-        if (customImage && message && address.name && address.street && address.city && address.postalCode) {
+        if (customImage && message) {
           setSending(true);
           setError('');
 
@@ -58,8 +52,7 @@
               },
               body: JSON.stringify({
                 image: customImage,
-                message: message,
-                address: address
+                message: message
               })
             });
 
@@ -108,7 +101,7 @@
                   fontSize: '1.5rem',
                   fontWeight: 'bold',
                   color: '#A8D8EA'
-                }}>Tu postal fue enviada!</h1>
+                }}>¡Tu postal fue enviada!</h1>
               </div>
 
               <div style={{
@@ -163,7 +156,7 @@
               <h1 style={{ fontSize: '1.875rem', fontWeight: 'bold', color: '#111827', marginBottom: '0.5rem' }}>
                 Envía tu postal
               </h1>
-              <p style={{ color: '#6B7280' }}>Completa los datos y sube tu imagen</p>
+              <p style={{ color: '#6B7280' }}>Subí tu imagen y escribí tu mensaje ✨</p>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
@@ -245,85 +238,18 @@
                 />
               </div>
 
-              {/* Address */}
-              <div>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', color: '#374151', marginBottom: '0.5rem' }}>
-                  Dirección de envío
-                </label>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  <input
-                    type="text"
-                    value={address.name}
-                    onChange={(e) => setAddress({...address, name: e.target.value})}
-                    placeholder="Nombre completo"
-                    style={{
-                      width: '100%',
-                      border: '1px solid #D1D5DB',
-                      borderRadius: '1rem',
-                      padding: '0.75rem 1rem',
-                      outline: 'none',
-                      fontFamily: 'Helvetica, Arial, sans-serif'
-                    }}
-                  />
-                  <input
-                    type="text"
-                    value={address.street}
-                    onChange={(e) => setAddress({...address, street: e.target.value})}
-                    placeholder="Dirección"
-                    style={{
-                      width: '100%',
-                      border: '1px solid #D1D5DB',
-                      borderRadius: '1rem',
-                      padding: '0.75rem 1rem',
-                      outline: 'none',
-                      fontFamily: 'Helvetica, Arial, sans-serif'
-                    }}
-                  />
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                    <input
-                      type="text"
-                      value={address.city}
-                      onChange={(e) => setAddress({...address, city: e.target.value})}
-                      placeholder="Ciudad"
-                      style={{
-                        width: '100%',
-                        border: '1px solid #D1D5DB',
-                        borderRadius: '1rem',
-                        padding: '0.75rem 1rem',
-                        outline: 'none',
-                        fontFamily: 'Helvetica, Arial, sans-serif'
-                      }}
-                    />
-                    <input
-                      type="text"
-                      value={address.postalCode}
-                      onChange={(e) => setAddress({...address, postalCode: e.target.value})}
-                      placeholder="Código Postal"
-                      style={{
-                        width: '100%',
-                        border: '1px solid #D1D5DB',
-                        borderRadius: '1rem',
-                        padding: '0.75rem 1rem',
-                        outline: 'none',
-                        fontFamily: 'Helvetica, Arial, sans-serif'
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-
               {/* Submit Button */}
               <button
                 onClick={handleSubmit}
-                disabled={!customImage || !message || !address.name || !address.street || !address.city || !address.postalCode || sending}
+                disabled={!customImage || !message || sending}
                 style={{
                   width: '100%',
                   padding: '1rem',
                   borderRadius: '9999px',
                   fontWeight: '600',
                   color: 'white',
-                  background: (customImage && message && address.name && address.street && address.city && address.postalCode && !sending) ? 'black' : '#D1D5DB',
-                  cursor: (customImage && message && address.name && address.street && address.city && address.postalCode && !sending) ? 'pointer' : 'not-allowed',
+                  background: (customImage && message && !sending) ? 'black' : '#D1D5DB',
+                  cursor: (customImage && message && !sending) ? 'pointer' : 'not-allowed',
                   border: 'none'
                 }}
               >
@@ -339,4 +265,5 @@
   </script>
 </body>
 </html>
+
 
