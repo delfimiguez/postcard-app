@@ -1,11 +1,8 @@
 // api/send-postcard.js
 
 export default async function handler(req, res) {
-  // Log básico para ver qué llega
-  console.log('Método:', req.method);
-
+  // Para que al abrir la URL en el navegador por GET no rompa
   if (req.method !== 'POST') {
-    // Cuando entres por navegador (GET) vas a ver esto:
     return res.status(200).json({
       ok: true,
       message: 'API send-postcard está viva. Usa POST desde el formulario.'
@@ -15,41 +12,71 @@ export default async function handler(req, res) {
   try {
     let body = req.body;
 
-    // En funciones Node de Vercel a veces req.body viene vacío,
-    // así que leemos el stream por las dudas:
-    if (!body || Object.keys(body).length === 0) {
-      const chunks = [];
+    // En Vercel, a veces req.body viene vacío aunque el JSON esté,
+    // así que leemos el stream manualmente por las dudas
+    if (!body || (typeof body === 'string' && !body.trim()) || Object.keys(body).length === 0) {
+      let raw = '';
       for await (const chunk of req) {
-        chunks.push(chunk);
+        raw += chunk;
       }
-      const raw = Buffer.concat(chunks).toString('utf8');
-      body = raw ? JSON.parse(raw) : {};
+
+      if (raw) {
+        try {
+          body = JSON.parse(raw);
+        } catch (err) {
+          console.error('Error parseando JSON:', err, 'raw:', raw.slice(0, 200));
+          return res.status(400).json({
+            ok: false,
+            error: 'JSON inválido recibido en el backend'
+          });
+        }
+      } else {
+        body = {};
+      }
     }
 
-    console.log('Body recibido:', body);
+    console.log('📩 Body recibido en send-postcard:', body);
 
-    const { email, imageUrl, message } = body;
+    const { image, message, address } = body || {};
 
-    if (!email || !imageUrl || !message) {
+    // Validaciones básicas de lo que manda tu front
+    if (!image || !message || !address) {
       return res.status(400).json({
         ok: false,
-        error: 'Faltan campos requeridos',
-        body
+        error: 'Faltan campos requeridos (image, message, address)',
+        received: body
       });
     }
 
-    // 🧪 Por ahora NO mandamos nada a ningún lado.
-    // Solo confirmamos que llegó bien.
+    if (!address.name || !address.street || !address.city || !address.postalCode) {
+      return res.status(400).json({
+        ok: false,
+        error: 'La dirección está incompleta',
+        received: address
+      });
+    }
+
+    // 👉 IMPORTANTE:
+    // Aquí ANTES llamabas a alguna API externa que ahora da el error de API key.
+    // La quitamos para que la demo funcione.
+    // Si después quieres integrar un servicio real, lo añadimos de nuevo
+    // leyendo la API key desde process.env.MI_API_KEY.
+
     return res.status(200).json({
       ok: true,
-      message: 'Postal recibida correctamente en el backend',
-      received: { email, imageUrl, message }
+      message: 'Postal recibida correctamente en el backend (demo)',
+      received: {
+        hasImage: !!image,
+        message,
+        address
+      }
     });
+
   } catch (err) {
-    console.error('Error en send-postcard:', err);
+    console.error('🚨 Error inesperado en send-postcard:', err);
     return res.status(500).json({
       ok: false,
-      error: 'Error interno del servidor'
+      error: 'Error interno del servidor en send-postcard'
     });
   }
 }
