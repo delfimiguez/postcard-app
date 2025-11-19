@@ -51,31 +51,49 @@
           setError('');
 
           try {
-            const response = await fetch('/api/send-postcard', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                image: customImage,
-                message: message,
-                address: address
-              })
-            });
+  const payload = {
+    image: customImage,
+    message: message,
+    address: address
+  };
 
-            const data = await response.json();
+  console.log("📤 Enviando payload:", payload);
 
-            if (response.ok) {
-              setSubmitted(true);
-            } else {
-              setError(data.error || 'Error al enviar la postal');
-              setSending(false);
-            }
-          } catch (err) {
-            setError('Error de conexión. Intenta de nuevo.');
-            setSending(false);
-          }
-        }
+  const response = await fetch('/api/send-postcard', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  });
+
+  const text = await response.text();
+  console.log("📥 Respuesta cruda de la API:", text);
+  console.log("📡 Status:", response.status);
+
+  let data = null;
+  try {
+    data = JSON.parse(text);
+  } catch (parseErr) {
+    console.error("⚠️ Error parseando JSON:", parseErr);
+  }
+
+  if (!response.ok) {
+    console.error("❌ Error desde la API:", data);
+    setError(data?.error || 'Error al enviar la postal');
+    setSending(false);
+    return;
+  }
+
+  console.log("✅ Postal enviada correctamente:", data);
+  setSubmitted(true);
+
+} catch (err) {
+  console.error("🚨 Error en fetch:", err);
+  setError('Error de conexión. Intenta de nuevo.');
+  setSending(false);
+}
+
       };
 
       if (submitted) {
