@@ -1,168 +1,138 @@
 // api/send-postcard.js
-// Maneja el envío de postales a través de Stannp
 
-import fetch from "node-fetch";
+import fetch from 'node-fetch';
+import FormData from 'form-data';
+import PDFDocument from 'pdfkit';
 
-let usedCodes = new Set();
+// Helper: crear un PDF sencillo con el mensaje
+function createBackPdf(message) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({
+      size: 'A5',     // coincide con size = "A5" de Stannp
+      margin: 40
+    });
+
+    const chunks = [];
+    doc.on('data', chunk => chunks.push(chunk));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    // Estilo simple, pero se puede tunear
+    doc.fontSize(18).text('Mensaje:', { bold: true });
+    doc.moveDown();
+    doc.fontSize(14).text(message, {
+      align: 'left',
+      lineGap: 4
+    });
+
+    doc.end();
+  });
+}
+
 let totalSent = 0;
 const MAX_SENDS = 300;
 
 export default async function handler(req, res) {
-  // Solo permitir POST
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Método no permitido" });
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Método no permitido' });
   }
 
-  // Verificar límite simple de envíos
-  if (totalSent >= MAX_SENDS) {
-    return res.status(403).json({
-      error: "Límite de envíos alcanzado",
-      sent: totalSent,
-      max: MAX_SENDS,
+  const { image, message } = req.body || {};
+
+  // Validaciones básicas
+  if (!image || !message) {
+    return res.status(400).json({
+      error: 'Faltan datos requeridos (imagen o mensaje)'
     });
   }
 
-  const { image, message, accessCode } = req.body || {};
-
-  // Validar datos mínimos
-  if (!image || !message) {
-    return res
-      .status(400)
-      .json({ error: "Faltan datos requeridos (imagen o mensaje)" });
-  }
-
-  // Validar tamaño aproximado de la imagen (máx 5MB)
-  // La imagen viene como data URL base64: "data:image/jpeg;base64,...."
+  // Decodificar imagen base64 y chequear tamaño
   try {
-    const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
-    const sizeInBytes = (base64Data.length * 3) / 4; // aproximación estándar
-    const maxBytes = 5 * 1024 * 1024; // 5 MB
+    const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
+    const imageBuffer = Buffer.from(base64Data, 'base64');
 
-    if (sizeInBytes > maxBytes) {
+    const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
+    if (imageBuffer.length > MAX_BYTES) {
       return res.status(400).json({
-        error: "La imagen es demasiado grande (máx. 5MB). Probá con otra más liviana.",
+        error: 'La imagen es demasiado grande (máx. 5 MB). Probá con una foto más liviana.'
       });
     }
-  } catch {
-    // Si algo falla al calcular el tamaño, seguimos, pero ya validamos más arriba que haya imagen
-  }
 
-  // Opcional: código de acceso único
-  if (accessCode) {
-    if (usedCodes.has(accessCode)) {
-      return res.status(403).json({ error: "Este código ya fue usado" });
+    if (totalSent >= MAX_SENDS) {
+      return res.status(403).json({
+        error: 'Límite de envíos alcanzado',
+        sent: totalSent,
+        max: MAX_SENDS
+      });
     }
-    usedCodes.add(accessCode);
-  }
 
-  try {
-    const FormData = (await import("form-data")).default;
+    // Crear el PDF del reverso con el mensaje
+    const backPdfBuffer = await createBackPdf(message);
+
+    // Armar cuerpo para Stannp
     const formData = new FormData();
 
-    // Test mode: por defecto "true" para NO enviar nada real todavía
-const testFlag = process.env.STANNP_TEST_MODE ?? "true";
-formData.append("test", testFlag);
+    // MODO TEST: sigue activo hasta que lo cambiemos
+    formData.append('test', process.env.STANNP_TEST_MODE ?? 'true');
+    formData.append('size', 'A5');
 
+    // Dirección fija (tu dirección en BCN)
+    formData.append('recipient[firstname]', 'Delfina');
+    formData.append('recipient[lastname]', 'Miguez');
+    formData.append('recipient[address1]', 'TU CALLE Y NÚMERO');
+    formData.append('recipient[city]', 'Barcelona');
+    formData.append('recipient[postcode]', '08000'); // cambia por tu CP real
+    formData.append('recipient[country]', 'ES');
 
-    // ===== DATOS DEL DESTINATARIO (FIJOS HACIA VOS) =====
-    // Configuralos como variables de entorno en Vercel para mayor comodidad.
-    const recipientName = process.env.RECIPIENT_NAME || "Delfina Miguez";
-    const recipientStreet =
-      process.env.RECIPIENT_STREET || "TU CALLE 123, PISO X";
-    const recipientCity = process.env.RECIPIENT_CITY || "Barcelona";
-    const recipientPostcode = process.env.RECIPIENT_POSTCODE || "080XX";
-
-    const [firstName, ...rest] = recipientName.split(" ");
-    const lastName = rest.join(" ");
-
-    formData.append("recipient[firstname]", firstName);
-    formData.append("recipient[lastname]", lastName);
-    formData.append("recipient[address1]", recipientStreet);
-    formData.append("recipient[city]", recipientCity);
-    formData.append("recipient[postcode]", recipientPostcode);
-    formData.append("recipient[country]", "ES"); // España
-
-    // ===== IMAGEN FRONTAL =====
-    const base64 = image.replace(/^data:image\/\w+;base64,/, "");
-    const imageBuffer = Buffer.from(base64, "base64");
-
-    formData.append("front", imageBuffer, {
-      filename: "front.jpg",
-      contentType: "image/jpeg",
+    // FRONT: imagen subida por la usuaria
+    formData.append('front', imageBuffer, {
+      filename: 'front.jpg',
+      contentType: 'image/jpeg'
     });
 
-    // ===== TEMPLATE PARA EL MENSAJE EN EL REVERSO =====
-    // Crea un template de postcard en Stannp y usá {{message}} en el texto.
-    // Definí STANNP_TEMPLATE_ID en Vercel (Settings → Environment Variables).
-    const templateId = process.env.STANNP_TEMPLATE_ID || "TU_TEMPLATE_ID_AQUÍ";
-    formData.append("template", templateId);
+    // BACK: PDF con el mensaje
+    formData.append('back', backPdfBuffer, {
+      filename: 'back.pdf',
+      contentType: 'application/pdf'
+    });
 
-    // Pasamos el mensaje como campo custom del destinatario
-    // En el template podés usar {{message}} para mostrarlo.
-    formData.append("recipient[message]", message);
-
-    // Tamaño de la postal
-    formData.append("size", "A5");
-    formData.append("post_unverified", "1");
-
-    // ===== CONFIGURACIÓN DE LA API STANNP =====
-    const apiKey = process.env.STANNP_API_KEY;
-    if (!apiKey) {
-      console.error("STANNP_API_KEY no está definida");
-      return res.status(500).json({
-        error: "Configuración del servidor incompleta (falta STANNP_API_KEY).",
-      });
-    }
-
-    const apiBase = process.env.STANNP_API_BASE || "https://api-eu1.stannp.com";
-
-    const response = await fetch(
-      `${apiBase}/api/v1/postcards/create?api_key=${apiKey}`,
+    const stannpResponse = await fetch(
+      'https://api-eu1.stannp.com/v1/postcards/create',
       {
-        method: "POST",
-        headers: formData.getHeaders(),
-        body: formData,
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${process.env.STANNP_API_KEY}`,
+          ...formData.getHeaders()
+        },
+        body: formData
       }
     );
 
-    const rawText = await response.text();
-    let result;
-    try {
-      result = JSON.parse(rawText);
-    } catch (e) {
-      console.error("Respuesta no JSON de Stannp:", rawText);
-      return res.status(502).json({
-        error: "Respuesta inesperada de Stannp",
-        details: rawText,
+    const result = await stannpResponse.json();
+
+    if (!stannpResponse.ok || !result.success) {
+      console.error('Error Stannp:', result);
+      return res.status(400).json({
+        error: 'Error al enviar la postal a Stannp',
+        stannp: result
       });
     }
 
-    if (!response.ok || result.success === false) {
-      console.error("Error de Stannp:", result);
-      return res.status(502).json({
-        error: "Error al enviar la postal",
-        details: result.error || rawText,
-      });
-    }
-
-    totalSent++;
+    totalSent += 1;
 
     return res.status(200).json({
       success: true,
-      message: "Postal enviada correctamente",
+      message: 'Postal enviada correctamente',
       sent: totalSent,
       remaining: MAX_SENDS - totalSent,
       stannpId: result.data?.id ?? null,
-      status: result.data?.status ?? null,
-      cost: result.data?.cost ?? null,
-      pdf: result.data?.pdf ?? null, // por si querés previsualizar
-      stannpRaw: result,
+      stannpRaw: result
     });
-  } catch (error) {
-    console.error("Error en función /api/send-postcard:", error);
+  } catch (err) {
+    console.error('Error general en send-postcard:', err);
     return res.status(500).json({
-      error: "Error al enviar la postal",
-      details: error.message,
+      error: 'Error interno al procesar la postal',
+      details: err.message
     });
   }
 }
