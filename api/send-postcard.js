@@ -21,7 +21,8 @@ export default async function handler(req, res) {
     });
   }
 
-  const { image, message } = req.body || {};
+  const { image, message, backImage } = req.body || {};
+
 
   // Validación básica: solo imagen + mensaje (ya no pedimos address del front)
   if (!image || !message) {
@@ -64,34 +65,47 @@ export default async function handler(req, res) {
     });
 
     // ===== BACK: HTML con el mensaje (como antes) =====
-    const backHtml = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8" />
-        <style>
-          body {
-            font-family: Helvetica, Arial, sans-serif;
-            padding: 40px;
-            margin: 0;
-          }
-          .message {
-            font-size: 14pt;
-            line-height: 1.6;
-            color: #333;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="message">${message}</div>
-      </body>
-      </html>
-    `;
+    // Si viene una imagen de reverso desde el front, la usamos.
+// Si no, usamos el HTML actual como fallback.
+if (backImage) {
+  const backBase64 = backImage.replace(/^data:image\/\w+;base64,/, '');
+  const backBuffer = Buffer.from(backBase64, 'base64');
 
-    formData.append('back', Buffer.from(backHtml), {
-      filename: 'back.html',
-      contentType: 'text/html'
-    });
+  formData.append('back', backBuffer, {
+    filename: 'back.jpg',
+    contentType: 'image/jpeg'
+  });
+} else {
+  const backHtml = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8" />
+      <style>
+        body {
+          font-family: Helvetica, Arial, sans-serif;
+          padding: 40px;
+          margin: 0;
+        }
+        .message {
+          font-size: 14pt;
+          line-height: 1.6;
+          color: #333;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="message">${message}</div>
+    </body>
+    </html>
+  `;
+
+  formData.append('back', Buffer.from(backHtml), {
+    filename: 'back.html',
+    contentType: 'text/html'
+  });
+}
+
 
     formData.append('size', 'A5');
     formData.append('post_unverified', '1');
