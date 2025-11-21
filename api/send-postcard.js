@@ -1,155 +1,135 @@
 // api/send-postcard.js
-// FRONT: foto subida (base64)
-// BACK: PDF generado con el mensaje (base64)
-// Endpoint oficial Stannp: https://api-eu1.stannp.com/v1/postcards/create
+// Versión simple que TENÍAS funcionando: front = imagen, back = HTML
+import fetch from 'node-fetch';
 
-import fetch from "node-fetch";
-
+// Contador simple en memoria
 let totalSent = 0;
 const MAX_SENDS = 300;
 
-// Estimar tamaño del base64 (para el límite de 5MB)
-function getBase64SizeBytes(dataUrl) {
-  const base64 = dataUrl.split(",")[1] || dataUrl;
-  const padding = (base64.match(/=+$/) || [""])[0].length;
-  return (base64.length * 3) / 4 - padding;
-}
-
-// Generar PDF A5 simple con el mensaje
-async function createBackPdfBase64(message) {
-  const PDFDocument = (await import("pdfkit")).default;
-
-  return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({
-      size: "A5",
-      margin: 40,
-    });
-
-    const chunks = [];
-    doc.on("data", (chunk) => chunks.push(chunk));
-    doc.on("end", () => {
-      const buffer = Buffer.concat(chunks);
-      const base64 = buffer.toString("base64");
-      resolve(base64);
-    });
-    doc.on("error", reject);
-
-    doc.fontSize(18).text("Mensaje:", { underline: false });
-    doc.moveDown();
-    doc.fontSize(14).text(message, {
-      align: "left",
-      lineGap: 4,
-    });
-
-    doc.end();
-  });
-}
-
 export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Método no permitido" });
+  // Solo permitir POST
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Método no permitido' });
   }
 
+  // Límite de seguridad
   if (totalSent >= MAX_SENDS) {
     return res.status(403).json({
-      error: "Límite de envíos alcanzado",
+      error: 'Límite de envíos alcanzado',
       sent: totalSent,
-      max: MAX_SENDS,
+      max: MAX_SENDS
     });
   }
 
   const { image, message } = req.body || {};
 
-  // Validación básica
+  // Validación básica: solo imagen + mensaje (ya no pedimos address del front)
   if (!image || !message) {
     return res.status(400).json({
-      error: "Faltan datos requeridos (imagen o mensaje).",
-    });
-  }
-
-  // Límite 5MB para la imagen
-  const sizeInBytes = getBase64SizeBytes(image);
-  const MAX_SIZE = 5 * 1024 * 1024;
-  if (sizeInBytes > MAX_SIZE) {
-    return res.status(400).json({
-      error:
-        "La imagen es demasiado grande (máx. 5MB). Probá con una foto más liviana.",
+      error: 'Faltan datos requeridos (imagen o mensaje).'
     });
   }
 
   try {
-    // Dirección fija: CAMBIÁ ESTO a tu dirección real
-    const recipient = {
-      firstname: "Delfina",
-      lastname: "Miguez",
-      address1: "TU CALLE 123, PISO X",
-      city: "Barcelona",
-      postcode: "08001",
-      country: "ES",
-    };
+    const FormData = (await import('form-data')).default;
+    const formData = new FormData();
 
-    // FRONT: sacamos solo la parte base64 (sin "data:image/...")
-    const frontBase64 = image.split(",")[1] || image;
+    // Modo test: dejamos 'true' por defecto hasta que vos decidas cambiarlo
+    const testFlag = process.env.STANNP_TEST_MODE ?? 'true';
+    formData.append('test', testFlag);
 
-    // BACK: PDF → base64
-    const backBase64 = await createBackPdfBase64(message);
+    // ===== DESTINATARIO FIJO: SIEMPRE VOS =====
+    const fullName = process.env.RECIPIENT_NAME || 'Delfina Miguez';
+    const [firstName, ...rest] = fullName.split(' ');
+    const lastName = rest.join(' ');
 
+    const street = process.env.RECIPIENT_STREET || 'TU CALLE 123, PISO X';
+    const city = process.env.RECIPIENT_CITY || 'Barcelona';
+    const postcode = process.env.RECIPIENT_POSTCODE || '08001';
+
+    formData.append('recipient[firstname]', firstName);
+    formData.append('recipient[lastname]', lastName);
+    formData.append('recipient[address1]', street);
+    formData.append('recipient[city]', city);
+    formData.append('recipient[postcode]', postcode);
+    formData.append('recipient[country]', 'ES');
+
+    // ===== FRONT: la imagen subida (base64 → buffer) =====
+    const base64 = image.replace(/^data:image\/\w+;base64,/, '');
+    const imageBuffer = Buffer.from(base64, 'base64');
+
+    formData.append('front', imageBuffer, {
+      filename: 'front.jpg',
+      contentType: 'image/jpeg'
+    });
+
+    // ===== BACK: HTML con el mensaje (como antes) =====
+    const backHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8" />
+        <style>
+          body {
+            font-family: Helvetica, Arial, sans-serif;
+            padding: 40px;
+            margin: 0;
+          }
+          .message {
+            font-size: 14pt;
+            line-height: 1.6;
+            color: #333;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="message">${message}</div>
+      </body>
+      </html>
+    `;
+
+    formData.append('back', Buffer.from(backHtml), {
+      filename: 'back.html',
+      contentType: 'text/html'
+    });
+
+    formData.append('size', 'A5');
+    formData.append('post_unverified', '1');
+
+    // ===== API KEY Y LLAMADA A STANNP =====
     const apiKey = process.env.STANNP_API_KEY;
     if (!apiKey) {
       return res.status(500).json({
-        error: "Falta STANNP_API_KEY en las variables de entorno.",
+        error: 'Falta STANNP_API_KEY en las variables de entorno.'
       });
     }
 
-    // Modo test por defecto (NO se envía nada real todavía)
-    const testFlag = (process.env.STANNP_TEST_MODE ?? "true") === "true";
-
-    // Body JSON según docs oficiales: front/back como base64
-    const body = {
-      test: testFlag,
-      size: "A5",
-      front: frontBase64, // base64 string
-      back: backBase64,   // base64 string (PDF)
-      recipient: {
-        firstname: recipient.firstname,
-        lastname: recipient.lastname,
-        address1: recipient.address1,
-        city: recipient.city,
-        postcode: recipient.postcode,
-        country: recipient.country,
-      },
-      post_unverified: true,
-    };
-
-    // Endpoint correcto oficial:
-    const url = "https://api-eu1.stannp.com/v1/postcards/create";
+    // Este endpoint + api_key en query es el que te estaba funcionando
+    const url = `https://api-eu1.stannp.com/api/v1/postcards/create?api_key=${apiKey}`;
 
     const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
+      method: 'POST',
+      headers: formData.getHeaders(),
+      body: formData
     });
 
-    const resultText = await response.text();
+    const rawText = await response.text();
     let result;
     try {
-      result = JSON.parse(resultText);
+      result = JSON.parse(rawText);
     } catch (e) {
-      console.error("Respuesta no JSON de Stannp:", resultText);
+      console.error('Respuesta no JSON de Stannp:', rawText);
       return res.status(502).json({
-        error: "Respuesta inesperada de Stannp",
-        details: resultText,
+        error: 'Respuesta inesperada de Stannp',
+        details: rawText
       });
     }
 
-    if (!response.ok || !result.success) {
-      console.error("Error Stannp:", result);
-      return res.status(400).json({
-        error: result.error || "Error al enviar la postal a Stannp",
-        stannpRaw: result,
+    if (!response.ok || result.success === false) {
+      console.error('Error Stannp:', result);
+      return res.status(502).json({
+        error: 'Error al enviar la postal a Stannp',
+        details: result.error || rawText
       });
     }
 
@@ -157,17 +137,17 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       success: true,
-      message: "Postal enviada correctamente (modo test)",
+      message: 'Postal enviada correctamente',
       sent: totalSent,
       remaining: MAX_SENDS - totalSent,
       stannpId: result.data?.id ?? null,
-      stannpRaw: result,
+      stannpRaw: result
     });
-  } catch (err) {
-    console.error("Error general en send-postcard:", err);
+  } catch (error) {
+    console.error('Error en /api/send-postcard:', error);
     return res.status(500).json({
-      error: "Error interno al procesar la postal",
-      details: err.message,
+      error: 'Error al enviar la postal',
+      details: error.message
     });
   }
 }
