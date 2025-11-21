@@ -32,7 +32,7 @@ export default async function handler(req, res) {
     const FormData = (await import('form-data')).default;
     const formData = new FormData();
 
-    // MODO TEST POR DEFECTO (hasta que lo cambies a real)
+    // MODO TEST POR DEFECTO (no manda nada real)
     const testFlag = process.env.STANNP_TEST_MODE ?? 'true';
     formData.append('test', testFlag);
 
@@ -78,7 +78,7 @@ export default async function handler(req, res) {
             .message {
               font-size: 14pt;
               line-height: 1.6;
-              color: #333;
+              color: '#333';
             }
           </style>
         </head>
@@ -103,13 +103,12 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Falta STANNP_API_KEY en Vercel.' });
     }
 
-    // ⬅️ Endpoint que antes te funcionaba (dash.stannp.com)
-    const url = 'https://dash.stannp.com/api/v1/postcards/create';
+    // ✅ Pasamos la API key por query string (esto evita el error de "no API key")
+    const url = `https://dash.stannp.com/api/v1/postcards/create?api_key=${apiKey}`;
 
     const response = await fetch(url, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${apiKey}`,
         ...formData.getHeaders()
       },
       body: formData
@@ -153,3 +152,4 @@ export default async function handler(req, res) {
     });
   }
 }
+
