@@ -59,9 +59,10 @@ export default async function handler(req, res) {
     const FormData = (await import("form-data")).default;
     const formData = new FormData();
 
-    // Test mode: por defecto "false" para que se envíe de verdad
-    const testFlag = process.env.STANNP_TEST_MODE ?? "false";
-    formData.append("test", testFlag);
+    // Test mode: por defecto "true" para NO enviar nada real todavía
+const testFlag = process.env.STANNP_TEST_MODE ?? "true";
+formData.append("test", testFlag);
+
 
     // ===== DATOS DEL DESTINATARIO (FIJOS HACIA VOS) =====
     // Configuralos como variables de entorno en Vercel para mayor comodidad.
