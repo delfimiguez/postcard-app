@@ -1,21 +1,22 @@
 // api/send-postcard.js
-// FRONT: foto que suben (JPEG)
-// BACK: PDF generado con el mensaje
+// FRONT: foto subida (base64)
+// BACK: PDF generado con el mensaje (base64)
+// Endpoint oficial Stannp: https://api-eu1.stannp.com/v1/postcards/create
 
 import fetch from "node-fetch";
 
 let totalSent = 0;
 const MAX_SENDS = 300;
 
-// Helper para estimar tamaño del base64 (límite 5MB)
+// Estimar tamaño del base64 (para el límite de 5MB)
 function getBase64SizeBytes(dataUrl) {
   const base64 = dataUrl.split(",")[1] || dataUrl;
   const padding = (base64.match(/=+$/) || [""])[0].length;
   return (base64.length * 3) / 4 - padding;
 }
 
-// Genera un PDF A5 simple con el mensaje
-async function createBackPdf(message) {
+// Generar PDF A5 simple con el mensaje
+async function createBackPdfBase64(message) {
   const PDFDocument = (await import("pdfkit")).default;
 
   return new Promise((resolve, reject) => {
@@ -26,7 +27,11 @@ async function createBackPdf(message) {
 
     const chunks = [];
     doc.on("data", (chunk) => chunks.push(chunk));
-    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("end", () => {
+      const buffer = Buffer.concat(chunks);
+      const base64 = buffer.toString("base64");
+      resolve(base64);
+    });
     doc.on("error", reject);
 
     doc.fontSize(18).text("Mensaje:", { underline: false });
@@ -55,16 +60,16 @@ export default async function handler(req, res) {
 
   const { image, message } = req.body || {};
 
-  // Validaciones básicas
+  // Validación básica
   if (!image || !message) {
     return res.status(400).json({
       error: "Faltan datos requeridos (imagen o mensaje).",
     });
   }
 
-  // Límite de 5MB
+  // Límite 5MB para la imagen
   const sizeInBytes = getBase64SizeBytes(image);
-  const MAX_SIZE = 5 * 1024 * 1024; // 5 MB
+  const MAX_SIZE = 5 * 1024 * 1024;
   if (sizeInBytes > MAX_SIZE) {
     return res.status(400).json({
       error:
@@ -73,7 +78,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Dirección fija: EDITÁ ESTO con tu dirección real
+    // Dirección fija: CAMBIÁ ESTO a tu dirección real
     const recipient = {
       firstname: "Delfina",
       lastname: "Miguez",
@@ -83,41 +88,11 @@ export default async function handler(req, res) {
       country: "ES",
     };
 
-    // FRONT: convertir base64 a buffer
-    const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
-    const frontBuffer = Buffer.from(base64Data, "base64");
+    // FRONT: sacamos solo la parte base64 (sin "data:image/...")
+    const frontBase64 = image.split(",")[1] || image;
 
-    // BACK: PDF con el mensaje
-    const backPdfBuffer = await createBackPdf(message);
-
-    const FormData = (await import("form-data")).default;
-    const formData = new FormData();
-
-    // ⛑ SEGUIMOS EN MODO TEST
-    const testFlag = process.env.STANNP_TEST_MODE ?? "true";
-    formData.append("test", testFlag);
-
-    formData.append("size", "A5");
-    formData.append("post_unverified", "1");
-
-    formData.append("recipient[firstname]", recipient.firstname);
-    formData.append("recipient[lastname]", recipient.lastname);
-    formData.append("recipient[address1]", recipient.address1);
-    formData.append("recipient[city]", recipient.city);
-    formData.append("recipient[postcode]", recipient.postcode);
-    formData.append("recipient[country]", recipient.country);
-
-    // FRONT: foto
-    formData.append("front", frontBuffer, {
-      filename: "front.jpg",
-      contentType: "image/jpeg",
-    });
-
-    // BACK: PDF con el texto
-    formData.append("back", backPdfBuffer, {
-      filename: "back.pdf",
-      contentType: "application/pdf",
-    });
+    // BACK: PDF → base64
+    const backBase64 = await createBackPdfBase64(message);
 
     const apiKey = process.env.STANNP_API_KEY;
     if (!apiKey) {
@@ -126,13 +101,36 @@ export default async function handler(req, res) {
       });
     }
 
-    // Endpoint EU1 correcto con api_key en query (esto te había funcionado)
-    const url = `https://api-eu1.stannp.com/api/v1/postcards/create?api_key=${apiKey}`;
+    // Modo test por defecto (NO se envía nada real todavía)
+    const testFlag = (process.env.STANNP_TEST_MODE ?? "true") === "true";
+
+    // Body JSON según docs oficiales: front/back como base64
+    const body = {
+      test: testFlag,
+      size: "A5",
+      front: frontBase64, // base64 string
+      back: backBase64,   // base64 string (PDF)
+      recipient: {
+        firstname: recipient.firstname,
+        lastname: recipient.lastname,
+        address1: recipient.address1,
+        city: recipient.city,
+        postcode: recipient.postcode,
+        country: recipient.country,
+      },
+      post_unverified: true,
+    };
+
+    // Endpoint correcto oficial:
+    const url = "https://api-eu1.stannp.com/v1/postcards/create";
 
     const response = await fetch(url, {
       method: "POST",
-      headers: formData.getHeaders(),
-      body: formData,
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
     });
 
     const resultText = await response.text();
