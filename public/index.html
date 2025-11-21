@@ -24,6 +24,22 @@
     );
 
     function PostcardApp() {
+
+      function PostcardApp() {
+
+  // Genera o recupera un token único para esta persona
+  const getUserToken = () => {
+    let token = localStorage.getItem('postcard_user_token');
+    if (!token) {
+      token = Math.random().toString(36).substring(2) + Date.now().toString(36);
+      localStorage.setItem('postcard_user_token', token);
+    }
+    return token;
+  };
+
+  const userToken = getUserToken();
+
+
       const [customImage, setCustomImage] = useState(null);
       const [message, setMessage] = useState('');
       const [submitted, setSubmitted] = useState(false);
@@ -100,10 +116,12 @@
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          image: customImage,   // frente
-          message: message,     // por si lo querés usar en backend
-          backImage: backImage  // dorso generado como JPG
-        })
+  image: customImage,
+  message: message,
+  backImage: backImage,
+  token: userToken
+})
+
       });
 
 
