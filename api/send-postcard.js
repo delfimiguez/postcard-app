@@ -1,8 +1,8 @@
 // api/send-postcard.js
 // FRONT: imagen subida (base64 → JPG buffer)
 // BACK: imagen generada desde canvas (base64 → JPG buffer) o HTML fallback
+
 import fetch from 'node-fetch';
-import FormData from 'form-data';
 
 let totalSent = 0;
 const MAX_SENDS = 300;
@@ -29,13 +29,14 @@ export default async function handler(req, res) {
   }
 
   try {
+    const FormData = (await import('form-data')).default;
     const formData = new FormData();
 
-    // MODO TEST SIEMPRE (hasta que decidamos activar real)
+    // MODO TEST POR DEFECTO (hasta que lo cambies a real)
     const testFlag = process.env.STANNP_TEST_MODE ?? 'true';
     formData.append('test', testFlag);
 
-    // DESTINATARIO FIJO — EDITÁ ESTO CON TU DIRECCIÓN REAL
+    // DESTINATARIO FIJO — CAMBIÁ ESTO A TU DIRECCIÓN REAL
     formData.append('recipient[firstname]', 'Delfina');
     formData.append('recipient[lastname]', 'Miguez');
     formData.append('recipient[address1]', 'TU CALLE 123, PISO X');
@@ -52,7 +53,7 @@ export default async function handler(req, res) {
       contentType: 'image/jpeg'
     });
 
-    // BACK — canvas generado → backImage (preferido)
+    // BACK — si viene backImage (del canvas), la usamos.
     if (backImage) {
       const backBase64 = backImage.replace(/^data:image\/\w+;base64,/, '');
       const backBuffer = Buffer.from(backBase64, 'base64');
@@ -62,7 +63,7 @@ export default async function handler(req, res) {
         contentType: 'image/jpeg'
       });
     } else {
-      // Fallback solo por si falla el canvas
+      // Fallback HTML (por si algún día falla el canvas)
       const backHtml = `
         <!DOCTYPE html>
         <html>
@@ -102,11 +103,15 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Falta STANNP_API_KEY en Vercel.' });
     }
 
-    const url = `https://api-eu1.stannp.com/api/v1/postcards/create?api_key=${apiKey}`;
+    // ⬅️ Endpoint que antes te funcionaba (dash.stannp.com)
+    const url = 'https://dash.stannp.com/api/v1/postcards/create';
 
     const response = await fetch(url, {
       method: 'POST',
-      headers: formData.getHeaders(),
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        ...formData.getHeaders()
+      },
       body: formData
     });
 
@@ -140,7 +145,6 @@ export default async function handler(req, res) {
       stannpId: result.data?.id ?? null,
       stannpRaw: result
     });
-
   } catch (error) {
     console.error('Error en send-postcard:', error);
     return res.status(500).json({
@@ -149,4 +153,3 @@ export default async function handler(req, res) {
     });
   }
 }
-
