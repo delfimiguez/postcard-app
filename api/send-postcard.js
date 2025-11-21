@@ -33,8 +33,13 @@ export default async function handler(req, res) {
     const formData = new FormData();
 
     // MODO TEST POR DEFECTO (no manda nada real)
-    const testFlag = process.env.STANNP_TEST_MODE ?? 'true';
-    formData.append('test', testFlag);
+    // const testFlag = process.env.STANNP_TEST_MODE ?? 'true';
+    // formData.append('test', testFlag);
+
+    // MODO REAL: envíos de verdad a Stannp
+        const testFlag = 'false';
+        formData.append('test', testFlag);
+
 
     // DESTINATARIO FIJO — CAMBIÁ ESTO A TU DIRECCIÓN REAL
     formData.append('recipient[firstname]', 'Delfina');
