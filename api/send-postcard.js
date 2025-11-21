@@ -31,7 +31,11 @@ export default async function handler(req, res) {
 
     // ⚠️ POR AHORA: sólo modo TEST (no se manda de verdad)
     // cambia a 'false' cuando esté todo OK
-    formData.append('test', 'true');
+    // formData.append('test', 'true');
+
+    // MODO REAL: imprime y envía
+    formData.append('test', 'false');
+
 
     // Dirección fija (cámbiala a la tuya real si hace falta)
     formData.append('recipient[firstname]', 'Delfina');
