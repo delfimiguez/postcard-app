@@ -39,22 +39,73 @@
         }
       };
 
-      const handleSubmit = async () => {
-        if (customImage && message) {
-          setSending(true);
-          setError('');
+      const createBackImage = (text) => {
+  const canvas = document.createElement('canvas');
+  // Tamaño aproximado A5 landscape en píxeles
+  canvas.width = 1748;
+  canvas.height = 1240;
 
-          try {
-            const response = await fetch('/api/send-postcard', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                image: customImage,
-                message: message
-              })
-            });
+  const ctx = canvas.getContext('2d');
+
+  // Fondo blanco
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Texto negro
+  ctx.fillStyle = '#000000';
+  ctx.font = '32px Arial';
+
+  const margin = 100;
+  const maxWidth = canvas.width - margin * 2;
+  const lineHeight = 42;
+
+  const words = text.split(' ');
+  let line = '';
+  let y = margin;
+
+  for (let i = 0; i < words.length; i++) {
+    const testLine = line + words[i] + ' ';
+    const testWidth = ctx.measureText(testLine).width;
+
+    if (testWidth > maxWidth && i > 0) {
+      ctx.fillText(line, margin, y);
+      line = words[i] + ' ';
+      y += lineHeight;
+    } else {
+      line = testLine;
+    }
+  }
+
+  if (line) {
+    ctx.fillText(line, margin, y);
+  }
+
+  // Devuelve un dataURL JPEG
+  return canvas.toDataURL('image/jpeg', 0.9);
+};
+
+
+     const handleSubmit = async () => {
+  if (customImage && message) {
+    setSending(true);
+    setError('');
+
+    try {
+      // Generamos la imagen del reverso con el mensaje
+      const backImage = createBackImage(message);
+
+      const response = await fetch('/api/send-postcard', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          image: customImage,   // frente
+          message: message,     // por si lo querés usar en backend
+          backImage: backImage  // dorso generado como JPG
+        })
+      });
+
 
             const data = await response.json();
 
