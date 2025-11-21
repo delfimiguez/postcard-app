@@ -44,9 +44,9 @@ export default async function handler(req, res) {
     // DESTINATARIO FIJO — CAMBIÁ ESTO A TU DIRECCIÓN REAL
     formData.append('recipient[firstname]', 'Delfina');
     formData.append('recipient[lastname]', 'Miguez');
-    formData.append('recipient[address1]', 'TU CALLE 123, PISO X');
+    formData.append('recipient[address1]', 'Carrer de Provenza, PISO 3 1');
     formData.append('recipient[city]', 'Barcelona');
-    formData.append('recipient[postcode]', '08001');
+    formData.append('recipient[postcode]', '08029');
     formData.append('recipient[country]', 'ES');
 
     // FRONT — imagen subida
