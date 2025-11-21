@@ -1,9 +1,3 @@
-"dependencies": {
-  "node-fetch": "^3.3.2",
-  "pdfkit": "^0.14.0"
-}
-
-
 {
   "name": "postcard-app",
   "version": "1.0.0",
