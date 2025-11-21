@@ -108,6 +108,42 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Falta STANNP_API_KEY en Vercel.' });
     }
 
+    // ...código de arriba igual que antes...
+
+// Justo antes del fetch a Stannp:
+const apiKey = process.env.STANNP_API_KEY;
+if (!apiKey) {
+  throw new Error('Falta STANNP_API_KEY en las variables de entorno');
+}
+
+formData.append('test', process.env.STANNP_TEST_MODE || 'true'); // 'true' = solo PDF, no envía
+
+const stannpResponse = await fetch(
+  `https://dash.stannp.com/api/v1/postcards/create?api_key=${apiKey}`,
+  {
+    method: 'POST',
+    body: formData
+  }
+);
+
+const stannpJson = await stannpResponse.json();
+
+if (!stannpResponse.ok || stannpJson.success === false) {
+  console.error('Stannp error:', stannpJson);
+  return res.status(500).json({
+    error: 'Error al enviar la postal',
+    stannpRaw: stannpJson
+  });
+}
+
+return res.status(200).json({
+  success: true,
+  message: 'Postal enviada correctamente',
+  stannpId: stannpJson.data?.id || 0,
+  stannpRaw: stannpJson
+});
+
+
     // ✅ Pasamos la API key por query string (esto evita el error de "no API key")
     const url = `https://dash.stannp.com/api/v1/postcards/create?api_key=${apiKey}`;
 
