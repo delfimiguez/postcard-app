@@ -1,7 +1,4 @@
 // api/send-postcard.js
-// FRONT: imagen subida (base64 → JPG buffer)
-// BACK: imagen generada desde canvas (base64 → JPG buffer) o HTML fallback
-
 import fetch from 'node-fetch';
 
 let totalSent = 0;
@@ -20,11 +17,11 @@ export default async function handler(req, res) {
     });
   }
 
-  const { image, message, backImage } = req.body || {};
+  const { image, backImage } = req.body || {};
 
-  if (!image || !message) {
+  if (!image || !backImage) {
     return res.status(400).json({
-      error: 'Faltan datos requeridos (imagen o mensaje).'
+      error: 'Faltan datos requeridos (image o backImage).'
     });
   }
 
@@ -32,24 +29,19 @@ export default async function handler(req, res) {
     const FormData = (await import('form-data')).default;
     const formData = new FormData();
 
-    // MODO TEST POR DEFECTO (no manda nada real)
-    // const testFlag = process.env.STANNP_TEST_MODE ?? 'true';
-    // formData.append('test', testFlag);
+    // ⚠️ POR AHORA: sólo modo TEST (no se manda de verdad)
+    // cambia a 'false' cuando esté todo OK
+    formData.append('test', 'true');
 
-    // MODO REAL: envíos de verdad a Stannp
-        const testFlag = 'false';
-        formData.append('test', testFlag);
-
-
-    // DESTINATARIO FIJO — CAMBIÁ ESTO A TU DIRECCIÓN REAL
+    // Dirección fija (cámbiala a la tuya real si hace falta)
     formData.append('recipient[firstname]', 'Delfina');
     formData.append('recipient[lastname]', 'Miguez');
-    formData.append('recipient[address1]', 'Carrer de Provenza, PISO 3 1');
+    formData.append('recipient[address1]', 'Carrer de Provenca 36, PISO 3 1');
     formData.append('recipient[city]', 'Barcelona');
     formData.append('recipient[postcode]', '08029');
     formData.append('recipient[country]', 'ES');
 
-    // FRONT — imagen subida
+    // FRONT (imagen subida)
     const frontBase64 = image.replace(/^data:image\/\w+;base64,/, '');
     const frontBuffer = Buffer.from(frontBase64, 'base64');
 
@@ -58,120 +50,52 @@ export default async function handler(req, res) {
       contentType: 'image/jpeg'
     });
 
-    // BACK — si viene backImage (del canvas), la usamos.
-    if (backImage) {
-      const backBase64 = backImage.replace(/^data:image\/\w+;base64,/, '');
-      const backBuffer = Buffer.from(backBase64, 'base64');
+    // BACK (imagen generada desde canvas con el texto)
+    const backBase64 = backImage.replace(/^data:image\/\w+;base64,/, '');
+    const backBuffer = Buffer.from(backBase64, 'base64');
 
-      formData.append('back', backBuffer, {
-        filename: 'back.jpg',
-        contentType: 'image/jpeg'
-      });
-    } else {
-      // Fallback HTML (por si algún día falla el canvas)
-      const backHtml = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="utf-8" />
-          <style>
-            body {
-              font-family: Helvetica, Arial, sans-serif;
-              padding: 40px;
-              margin: 0;
-            }
-            .message {
-              font-size: 14pt;
-              line-height: 1.6;
-              color: '#333';
-            }
-          </style>
-        </head>
-        <body>
-          <div class="message">${message}</div>
-        </body>
-        </html>
-      `;
-
-      formData.append('back', Buffer.from(backHtml), {
-        filename: 'back.html',
-        contentType: 'text/html'
-      });
-    }
+    formData.append('back', backBuffer, {
+      filename: 'back.jpg',
+      contentType: 'image/jpeg'
+    });
 
     formData.append('size', 'A5');
     formData.append('post_unverified', '1');
 
-    // API KEY
+    // ---------- API KEY ----------
     const apiKey = process.env.STANNP_API_KEY;
     if (!apiKey) {
-      return res.status(500).json({ error: 'Falta STANNP_API_KEY en Vercel.' });
-    }
-
-    // ...código de arriba igual que antes...
-
-// Justo antes del fetch a Stannp:
-const apiKey = process.env.STANNP_API_KEY;
-if (!apiKey) {
-  throw new Error('Falta STANNP_API_KEY en las variables de entorno');
-}
-
-formData.append('test', process.env.STANNP_TEST_MODE || 'true'); // 'true' = solo PDF, no envía
-
-const stannpResponse = await fetch(
-  `https://dash.stannp.com/api/v1/postcards/create?api_key=${apiKey}`,
-  {
-    method: 'POST',
-    body: formData
-  }
-);
-
-const stannpJson = await stannpResponse.json();
-
-if (!stannpResponse.ok || stannpJson.success === false) {
-  console.error('Stannp error:', stannpJson);
-  return res.status(500).json({
-    error: 'Error al enviar la postal',
-    stannpRaw: stannpJson
-  });
-}
-
-return res.status(200).json({
-  success: true,
-  message: 'Postal enviada correctamente',
-  stannpId: stannpJson.data?.id || 0,
-  stannpRaw: stannpJson
-});
-
-
-    // ✅ Pasamos la API key por query string (esto evita el error de "no API key")
-    const url = `https://dash.stannp.com/api/v1/postcards/create?api_key=${apiKey}`;
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        ...formData.getHeaders()
-      },
-      body: formData
-    });
-
-    const rawText = await response.text();
-    let result;
-    try {
-      result = JSON.parse(rawText);
-    } catch {
-      console.error('Respuesta NO JSON:', rawText);
-      return res.status(502).json({
-        error: 'Respuesta inesperada de Stannp',
-        details: rawText
+      return res.status(500).json({
+        error: 'Falta STANNP_API_KEY en Vercel'
       });
     }
 
-    if (!response.ok || result.success === false) {
-      console.error('Error Stannp:', result);
+    const url = `https://dash.stannp.com/api/v1/postcards/create?api_key=${encodeURIComponent(
+      apiKey
+    )}`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      body: formData
+    });
+
+    const raw = await response.text();
+    let data;
+
+    try {
+      data = JSON.parse(raw);
+    } catch (e) {
+      // Si Stannp devuelve HTML o algo raro, lo vemos tal cual
       return res.status(502).json({
-        error: result.error || 'Error al enviar postal a Stannp',
-        stannpRaw: result
+        error: 'Respuesta inesperada de Stannp (no es JSON)',
+        raw
+      });
+    }
+
+    if (!response.ok || data.success === false) {
+      return res.status(502).json({
+        error: data.error || 'Error devuelto por Stannp',
+        stannpRaw: data
       });
     }
 
@@ -182,11 +106,10 @@ return res.status(200).json({
       message: 'Postal enviada correctamente (modo test)',
       sent: totalSent,
       remaining: MAX_SENDS - totalSent,
-      stannpId: result.data?.id ?? null,
-      stannpRaw: result
+      stannpId: data.data?.id ?? null,
+      stannpRaw: data
     });
   } catch (error) {
-    console.error('Error en send-postcard:', error);
     return res.status(500).json({
       error: 'Error al enviar la postal',
       details: error.message
